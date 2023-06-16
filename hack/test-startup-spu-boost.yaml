@@ -1,0 +1,11 @@
+apiVersion: autoscaling.stefaniak.dev/v1alpha1
+kind: StartupCPUBoost
+metadata:
+  name: boost-001
+  namespace: demo
+selector:
+  matchLabels:
+    app: app-001
+spec:
+  timePeriod: 300
+  boostPercent: 50
