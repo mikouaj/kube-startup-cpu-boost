@@ -18,7 +18,7 @@ before:
 builds:
   - id: kube-startup-cpu-boost
     main: ./cmd
-    binary: ./bin/manager 
+    binary: manager 
     env:
       - CGO_ENABLED=0
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -34,9 +34,7 @@ builds:
       pre:
         - cmd: make manifests generate 
       post:
-        - cmd: kustomize edit set image controller=ghcr.io/mikouaj/{{ .ProjectName }}:{{ .Tag }}
-          dir: config/manager
-        - cmd: kustomize build config/default > manifests.yaml
+        - cmd: make release IMG=ghcr.io/mikouaj/{{ .ProjectName }}:{{ .Tag }} MANIFESTS=manifests.yaml
 dockers:
   - goos: linux
     goarch: amd64
@@ -44,10 +42,18 @@ dockers:
     image_templates:
       - "ghcr.io/mikouaj/{{ .ProjectName }}:latest"
       - "ghcr.io/mikouaj/{{ .ProjectName }}:{{ .Tag }}" 
-      - "ghcr.io/mikouaj/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}" 
       - "ghcr.io/mikouaj/{{ .ProjectName }}:{{ .ShortCommit }}" 
 archives:
-  - format: binary
+  - format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds:
+      - kube-startup-cpu-boost
+    files:
+      - LICENSE*
+      - README*
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
 release:
   # If you want to manually examine the release before its live, uncomment this line:
   # draft: true
