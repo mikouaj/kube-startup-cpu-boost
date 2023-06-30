@@ -34,7 +34,6 @@ import (
 
 var (
 	errStartupCPUBoostAlreadyExists = errors.New("startupCPUBoost already exists")
-	errStartupCPUBoostNotFound      = errors.New("startupCPUBoost was not found")
 	errInvalidStartupCPUBoostSpec   = errors.New("invalid startupCPUBoost spec")
 )
 
