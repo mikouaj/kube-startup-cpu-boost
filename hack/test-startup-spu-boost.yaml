@@ -4,8 +4,10 @@ metadata:
   name: boost-001
   namespace: demo
 selector:
-  matchLabels:
-    app: app-001
+  matchExpressions:
+  - key: app
+    operator: In
+    values: ["app-001", "whereami"]
 spec:
-  timePeriod: 300
+  timePeriod: 60
   boostPercent: 50

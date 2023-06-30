@@ -96,7 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	boostMgr := boost.NewManager()
+	boostMgr := boost.NewManager(mgr.GetClient())
 	go setupControllers(mgr, boostMgr, certsReady)
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -107,7 +107,9 @@ func main() {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
-
+	if err := mgr.Add(boostMgr); err != nil {
+		setupLog.Error(err, "unable to add boost manager to controller-runtime manager")
+	}
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -120,7 +122,7 @@ func setupControllers(mgr ctrl.Manager, boostMgr boost.Manager, certsReady chan 
 	<-certsReady
 	setupLog.Info("Certificate generation has completed")
 
-	cpuBoostWebHook := boostWebhook.NewPodCPUBoostWebHook(boostMgr)
+	cpuBoostWebHook := boostWebhook.NewPodCPUBoostWebHook(boostMgr, scheme)
 	mgr.GetWebhookServer().Register("/mutate-v1-pod", cpuBoostWebHook)
 
 	if err := (&controller.StartupCPUBoostReconciler{
@@ -132,5 +134,11 @@ func setupControllers(mgr ctrl.Manager, boostMgr boost.Manager, certsReady chan 
 		setupLog.Error(err, "unable to create controller", "controller", "StartupCPUBoost")
 		os.Exit(1)
 	}
+	/*
+		if err = (&autoscalingv1alpha1.StartupCPUBoost{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "StartupCPUBoost")
+			os.Exit(1)
+		}
+	*/
 	//+kubebuilder:scaffold:builder
 }

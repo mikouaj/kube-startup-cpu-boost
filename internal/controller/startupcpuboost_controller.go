@@ -20,12 +20,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
 	autoscaling "github.com/mikouaj/kube-startup-cpu-boost/api/v1alpha1"
 	"github.com/mikouaj/kube-startup-cpu-boost/internal/boost"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // StartupCPUBoostReconciler reconciles a StartupCPUBoost object
@@ -39,6 +42,7 @@ type StartupCPUBoostReconciler struct {
 //+kubebuilder:rbac:groups=autoscaling.stefaniak.dev,resources=startupcpuboosts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=autoscaling.stefaniak.dev,resources=startupcpuboosts/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=autoscaling.stefaniak.dev,resources=startupcpuboosts/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;update;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -54,39 +58,63 @@ func (r *StartupCPUBoostReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.Client.Get(ctx, req.NamespacedName, &boostObj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	log := ctrl.LoggerFrom(ctx).WithValues("startupCPUBoost", klog.KObj(&boostObj))
+	log := ctrl.LoggerFrom(ctx)
 	log.V(2).Info("Reconciling StartupCPUBoost")
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *StartupCPUBoostReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	boostPodHandler := &boostPodHandler{
+		manager: r.Manager,
+		log:     r.Log,
+	}
+	lsPredicate, err := predicate.LabelSelectorPredicate(*boostPodHandler.GetPodLabelSelector())
+	if err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&autoscaling.StartupCPUBoost{}).
+		Watches(&corev1.Pod{},
+			boostPodHandler,
+			builder.WithPredicates(lsPredicate)).
 		WithEventFilter(r).
 		Complete(r)
 }
 
 func (r *StartupCPUBoostReconciler) Create(e event.CreateEvent) bool {
-	log := r.Log.WithValues("startupCPUBoost", klog.KObj(e.Object))
-	log.Info("StartupCPUBoost create event")
+	boostObj, ok := e.Object.(*autoscaling.StartupCPUBoost)
+	if !ok {
+		return true
+	}
+	log := r.Log.WithValues("StartupCPUBoost", klog.KObj(boostObj))
+	log.V(2).Info("StartupCPUBoost create event")
+	ctx := ctrl.LoggerInto(context.Background(), log)
+	if err := r.Manager.AddStartupCPUBoost(ctx, boostObj); err != nil {
+		log.Error(err, "Failed to add startupCPUBoost to boost manager")
+	}
 	return true
 }
 
 func (r *StartupCPUBoostReconciler) Delete(e event.DeleteEvent) bool {
-	log := r.Log.WithValues("startupCPUBoost", klog.KObj(e.Object))
-	log.Info("StartupCPUBoost delete event")
+	boostObj, ok := e.Object.(*autoscaling.StartupCPUBoost)
+	if !ok {
+		return true
+	}
+	log := r.Log.WithValues("StartupCPUBoost", klog.KObj(e.Object))
+	log.V(2).Info("StartupCPUBoost delete event")
+	r.Manager.DeleteStartupCPUBoost(boostObj)
 	return true
 }
 
 func (r *StartupCPUBoostReconciler) Update(e event.UpdateEvent) bool {
-	log := r.Log.WithValues("startupCPUBoost", klog.KObj(e.ObjectNew))
-	log.Info("StartupCPUBoost update event")
+	log := r.Log.WithValues("StartupCPUBoost", klog.KObj(e.ObjectNew))
+	log.V(2).Info("StartupCPUBoost update event")
 	return true
 }
 
 func (r *StartupCPUBoostReconciler) Generic(e event.GenericEvent) bool {
-	log := r.Log.WithValues("startupCPUBoost", klog.KObj(e.Object))
-	log.Info("StartupCPUBoost generic event")
+	log := r.Log.WithValues("StartupCPUBoost", klog.KObj(e.Object))
+	log.V(2).Info("StartupCPUBoost generic event")
 	return true
 }

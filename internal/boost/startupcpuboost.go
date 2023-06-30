@@ -15,16 +15,50 @@
 package boost
 
 import (
+	"errors"
+	"sync"
+	"time"
+
 	autoscaling "github.com/mikouaj/kube-startup-cpu-boost/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	errPodAlreadyExists = errors.New("pod already exists")
+)
+
 type startupCPUBoost struct {
+	sync.RWMutex
 	name      string
 	namespace string
+	percent   int64
+	time      time.Duration
 	selector  labels.Selector
+	pods      map[string]*startupCPUBoostPod
+}
+
+func (b *startupCPUBoost) Name() string {
+	return b.name
+}
+
+func (b *startupCPUBoost) Namespace() string {
+	return b.namespace
+}
+
+func (b *startupCPUBoost) BoostPercent() int64 {
+	return b.percent
+}
+
+func (b *startupCPUBoost) AddPod(pod *startupCPUBoostPod) error {
+	b.Lock()
+	defer b.Unlock()
+	if _, ok := b.pods[pod.name]; ok {
+		return errPodAlreadyExists
+	}
+	b.pods[pod.name] = pod
+	return nil
 }
 
 func newStartupCPUBoost(boost *autoscaling.StartupCPUBoost) (*startupCPUBoost, error) {
@@ -36,9 +70,8 @@ func newStartupCPUBoost(boost *autoscaling.StartupCPUBoost) (*startupCPUBoost, e
 		name:      boost.Name,
 		namespace: boost.Namespace,
 		selector:  selector,
+		percent:   boost.Spec.BoostPercent,
+		time:      time.Duration(boost.Spec.TimePeriod) * time.Second,
+		pods:      make(map[string]*startupCPUBoostPod),
 	}, nil
-}
-
-func Key(boost *autoscaling.StartupCPUBoost) string {
-	return boost.Namespace + "/" + boost.Name
 }

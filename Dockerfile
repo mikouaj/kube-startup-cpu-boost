@@ -28,7 +28,10 @@ RUN go mod download
 # Copy the go source
 COPY cmd/main.go cmd/main.go
 COPY api/ api/
+COPY internal/boost/ internal/boost/
 COPY internal/controller/ internal/controller/
+COPY internal/util/ internal/util/
+COPY internal/webhook/ internal/webhook/
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
