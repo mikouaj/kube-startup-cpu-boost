@@ -1,80 +1,92 @@
-# kube-startup-cpu-boost
-// TODO(user): Add simple overview of use/purpose
+# Kube Startup CPU Boost
+
+Kube Startup CPU Boost is a controller that increases CPU resource requests and limits during
+Kubernetes workload startup time. Once the workload is up and running,
+the resources are set back to their original values.
+
+
+[![Build](https://github.com/mikouaj/kube-startup-cpu-boost/actions/workflows/build.yml/badge.svg)](https://github.com/mikouaj/kube-startup-cpu-boost/actions/workflows/build.yml)
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
 
-## Getting Started
-You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-**Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
+The primary use cases for Kube Startup CPU Boosts are workloads that require extra CPU resources during
+startup phase - typically JVM based applications.
 
-### Running on the cluster
-1. Install Instances of Custom Resources:
+The Kube Startup CPU Boost leverages [In-place Resource Resize for Kubernetes Pods](https://kubernetes.io/blog/2023/05/12/in-place-pod-resize-alpha/)
+feature introduced in Kubernetes 1.27. It allows to revert workload's CPU resource requests and limits
+back to their original values without the need to recreate the Pods.
 
-```sh
-kubectl apply -f config/samples/
-```
+The increase of resources is achieved by Mutating Admission Webhook.
 
-2. Build and push your image to the location specified by `IMG`:
+## Installation
 
-```sh
-make docker-build docker-push IMG=<some-registry>/kube-startup-cpu-boost:tag
-```
+**Requires Kubernetes 1.27 on newer with `InPlacePodVerticalScaling` feature gate
+enabled.**
 
-3. Deploy the controller to the cluster with the image specified by `IMG`:
+To install the latest release of Kube Startup CPU Boost in your cluster, run the following command:
 
 ```sh
-make deploy IMG=<some-registry>/kube-startup-cpu-boost:tag
+kubectl apply -f https://github.com/mikouaj/kube-startup-cpu-boost/releases/download/v0.0.1/manifests.yaml
 ```
 
-### Uninstall CRDs
-To delete the CRDs from the cluster:
+The Kube Startup CPU Boost components run in `kube-startup-cpu-boost-system` namespace.
+
+### Installation on Kind cluster
+
+You can use [KIND](https://github.com/kubernetes-sigs/kind) to get a local cluster for testing.
 
 ```sh
-make uninstall
+cat <<EOF > kind-poc-cluster.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: poc
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+featureGates:
+  InPlacePodVerticalScaling: true 
+EOF
+kind create cluster --config kind-poc-cluster.yaml
 ```
 
-### Undeploy controller
-UnDeploy the controller from the cluster:
+### Installation on GKE cluster
+
+You can use [GKE Alpha cluster](https://cloud.google.com/kubernetes-engine/docs/concepts/alpha-clusters)
+to run against the remote cluster.
 
 ```sh
-make undeploy
+gcloud container clusters create poc \
+    --enable-kubernetes-alpha \
+    --no-enable-autorepair \
+    --no-enable-autoupgrade \
+    --region europe-central2
 ```
 
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+## Usage
 
-### How it works
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
+1. Create `StartupCPUBoost` object in your workload's namespace
 
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
-which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
+   ```sh
+   apiVersion: autoscaling.stefaniak.dev/v1alpha1
+   kind: StartupCPUBoost
+   metadata:
+     name: boost-001
+     namespace: demo
+   selector:
+     matchExpressions:
+     - key: app
+       operator: In
+       values: ["app-001", "app-002"]
+   spec:
+     timePeriod: 60
+     boostPercent: 50
+   ```
 
-### Test It Out
-1. Install the CRDs into the cluster:
+   The above example will boost CPU requests and limits of all PODs with `app=app-001` and `app=app-002`
+   labels in `demo` namespace. The resources will be increased by 50% for 60 seconds.
 
-```sh
-make install
-```
-
-2. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
-
-```sh
-make run
-```
-
-**NOTE:** You can also run this in one step by running: `make install run`
-
-### Modifying the API definitions
-If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
-
-```sh
-make manifests
-```
-
-**NOTE:** Run `make --help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+2. Schedule your workloads and observe the results
 
 ## License
 
