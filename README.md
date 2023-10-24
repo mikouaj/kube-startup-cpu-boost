@@ -1,5 +1,8 @@
 # Kube Startup CPU Boost
 
+**NOTE: project is continued in [Kube Startup CPU Boost](https://github.com/google/kube-startup-cpu-boost)
+Github repository under Google organization.**
+
 Kube Startup CPU Boost is a controller that increases CPU resource requests and limits during
 Kubernetes workload startup time. Once the workload is up and running,
 the resources are set back to their original values.
